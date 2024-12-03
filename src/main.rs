@@ -50,20 +50,46 @@ async fn age(
 async fn meme(ctx: Context<'_>) -> Result<(), Error> {
     let mut m: String = String::from("meme");
 
-    let response = reqwest::get("https://meme-api.com/gimme/meme").await?;
+    let res = reqwest::get("https://meme-api.com/gimme/meme").await;
 
-    // Check the status code
-    if response.status().is_success() {
-        // Parse the response body (e.g., as JSON)
-        let data: serde_json::Value = response.json().await?;
-        println!("Data: {:?}", data);
-        m = data["preview"][3].as_str().unwrap().to_string();
-    } else {
-        println!("Error: {}", response.status());
+    match res {
+        Ok(response) if response.status().is_success() => {
+            // Attempt to parse the response JSON
+            let data: serde_json::Value = response.json().await?;
+
+            println!("Data: {:?}", data);
+
+            // Safely access the "preview" array and get the last element
+            if let Some(preview_array) = data["preview"].as_array() {
+                // Ensure the preview array is not empty
+                if let Some(last_image) = preview_array.last() {
+                    // Make sure the last element is a valid string
+                    if let Some(image_url_str) = last_image.as_str() {
+                        m = image_url_str.to_string();
+                    } else {
+                        println!("Error: Last preview element is not a valid string.");
+                    }
+                } else {
+                    println!("Error: 'preview' array is empty.");
+                }
+            } else {
+                println!("Error: 'preview' key is missing or not an array.");
+            }
+
+            let response = format!("{}", m);
+            ctx.say(response).await?;
+        }
+        Ok(response) => {
+            println!(
+                "Error: Received non-success status code: {}",
+                response.status()
+            );
+        }
+        Err(err) => {
+            println!("Error: Request failed - {}", err);
+        }
     }
 
-    let response = format!("{}", m);
-    ctx.say(response).await?;
     Ok(())
 }
 
